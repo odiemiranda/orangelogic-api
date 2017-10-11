@@ -1,0 +1,5 @@
+.env
+/vendor
+/test
+composer.lock
+composer.lock

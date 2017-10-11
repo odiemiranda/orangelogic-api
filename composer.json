@@ -1,0 +1,26 @@
+{
+    "name": "odiemiranda/orangelogic-api",
+    "description": "Simple OrangeLogic Search API wrapper",
+    "license": "MIT",
+    "require": {
+        "php": ">=5.3",
+        "ext-curl": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "4.0.*",
+        "vlucas/phpdotenv": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OdieMiranda\\OrangeLogic\\": "src"
+        }
+    },
+    "homepage": "https://github.com/odiemiranda/orangelogic-api",
+    "authors": [ 
+        {
+            "name": "Odie Miranda",
+            "email": "odie.miranda@gmail.com"
+        }
+    ]
+
+}
