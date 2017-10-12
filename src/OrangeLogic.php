@@ -6,7 +6,7 @@ namespace OdieMiranda\OrangeLogic;
  * Simple OrangeLogic API wrapper
  *
  * @author Odie Miranda <odie.miranda@gmail.com>
- * @version 1.0
+ * @version 1.01
  */
 class OrangeLogic
 {
