@@ -14,7 +14,7 @@ class OrangeLogic
     private $loginID;
     private $password;
     private $token = null;
-    private $api_endpoint = 'https://<domain>/API';
+    private $endpoint = 'https://<domain>';
 
     /*  SSL Verification
         Read before disabling: 
@@ -32,6 +32,7 @@ class OrangeLogic
 
     /**
      * Create a new instance
+     *
      * @param string domain Your OrangeLogic Asset Manager Domain
      * @param string $loginID Your OrangeLogic API LoginID
      * @param string $password Your OrangeLogic API Password 
@@ -51,7 +52,7 @@ class OrangeLogic
             throw new \Exception('Invalid domain format.');
         }
 
-        $this->api_endpoint     = str_replace('<domain>', $this->domain, $this->api_endpoint);
+        $this->endpoint     = str_replace('<domain>', $this->domain, $this->endpoint);
         $this->last_response    = array('header' => null, 'body' => null);
         $this->searchInfo       = array('TotalCount' => 0, 'Sort' => '', 'NextPage' => false, 'PrevPage' => false, 'Items' => array());
         
@@ -65,6 +66,7 @@ class OrangeLogic
 
     /**
      * Check if Token is present if not request a new token from OrangeLogic API
+     *
      */
     public function getToken()
     {
@@ -117,7 +119,7 @@ class OrangeLogic
         }
 
 
-        $response = $this->post('search/v3.0/search', [
+        $response = $this->post('API/search/v3.0/search', [
                         'query' => $query, 
                         'fields' => $fields,
                         'sort' => $sortBy,
@@ -140,6 +142,7 @@ class OrangeLogic
 
     /**
      * Returns the search result items
+     *
      */
     public function getItems()
     {
@@ -148,6 +151,7 @@ class OrangeLogic
 
     /**
      * Returns the total search result count
+     *
      */
     public function getTotalCount()
     {
@@ -156,6 +160,7 @@ class OrangeLogic
 
     /**
      * Set the returned result per page 
+     *
      */
     public function setCountPerPage($count)
     {
@@ -164,6 +169,7 @@ class OrangeLogic
 
     /**
      * Returns the current result per page count
+     *
      */
     public function getCountPerPage()
     {
@@ -171,7 +177,40 @@ class OrangeLogic
     }
 
     /**
+     * Get High-Res/Original Media File
+     *
+     * @param $mediaId The MediaEncryptedIdentifier of the media item
+     */
+    public function getOriginalMedia($mediaId, $path = './', $filename = null)
+    {
+        if (is_null($filename) && !is_string($filename) && strlen($filename) == 0) {
+            $filename = $mediaId.'.jpg';
+        }
+
+        $url = $this->endpoint . '/htm/GetDocumentAPI.aspx';
+        $args = [
+            'F' => 'TRX',
+            'DocID' => $mediaId,
+            'token' => $this->getToken()
+        ];
+
+        $response = $this->makeRawRequest('get', $url, $args, 0);
+
+        $save_to = $path . $filename;
+        if(file_exists($save_to)) {
+            unlink($save_to);
+        }
+        $fp = fopen($save_to,'x');
+        fwrite($fp, $response['body']);
+        fclose($fp);
+        
+    
+        return $filename;
+    }
+
+    /**
      * Get current token
+     *
      */
     public function getCurrentToken()
     {
@@ -180,10 +219,11 @@ class OrangeLogic
 
     /**
      * Get New Token from OrangeLogic API
+     *
      */
     private function getNewToken()
     {
-        $response = $this->get('Authentication/v1.0/Login', [
+        $response = $this->get('API/Authentication/v1.0/Login', [
                         'login' => $this->loginID, 
                         'password' => $this->password
                     ]);
@@ -201,6 +241,7 @@ class OrangeLogic
 
     /**
      * Make an HTTP GET request - for retrieving data
+     *
      * @param   string $method URL of the API request method
      * @param   array $args Assoc array of arguments (usually your data)
      * @param   int $timeout Timeout limit for request in seconds
@@ -224,8 +265,8 @@ class OrangeLogic
     }
 
     /**
-     * Performs the underlying HTTP request. Not very exciting.
-     * @param  string $http_verb The HTTP verb to use: get, post, put, patch, delete
+     * Performs the underlying HTTP request and format the expected json response..
+     * @param  string $http_verb The HTTP verb to use: get, post
      * @param  string $method The API method to be called
      * @param  array $args Assoc array of parameters to be passed
      * @param int $timeout
@@ -234,11 +275,31 @@ class OrangeLogic
      */
     private function makeRequest($http_verb, $method, $args = array(), $timeout = 10)
     {
+
+        $url = $this->endpoint . '/' . $method;
+        // force response to JSON
+        $args['format'] = 'json';
+
+        $response = $this->makeRawRequest($http_verb, $url, $args, $timeout);
+
+        return $this->formatResponse($response);
+    }
+
+    /**
+     * Performs the underlying RAW HTTP request. Not very exciting.
+     * @param  string $http_verb The HTTP verb to use: get, post
+     * @param  string $method The API method to be called
+     * @param  array $args Assoc array of parameters to be passed
+     * @param int $timeout
+     * @return array|false Assoc array of decoded result
+     * @throws \Exception
+     */
+    private function makeRawRequest($http_verb, $url, $args = array(), $timeout = 10)
+    {
         if (!function_exists('curl_init') || !function_exists('curl_setopt')) {
             throw new \Exception("cURL support is required, but can't be found.");
         }
 
-        $url = $this->api_endpoint . '/' . $method;
 
         $this->last_error         = '';
         $this->request_successful = false;
@@ -247,29 +308,29 @@ class OrangeLogic
 
         $this->last_request = array(
             'method'  => $http_verb,
-            'path'    => $method,
             'url'     => $url,
             'body'    => '',
             'timeout' => $timeout,
         );
-
-        // force response to JSON
-        $args['format'] = 'json';
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_USERAGENT, 'OdieMiranda/OrangeLogic-API/1.0 (github.com/odiemiranda/orangelogic-api)');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $this->verify_ssl);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
+        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
         curl_setopt($ch, CURLOPT_ENCODING, '');
         curl_setopt($ch, CURLINFO_HEADER_OUT, true);
 
         switch ($http_verb) {
             case 'post':
                 curl_setopt($ch, CURLOPT_POST, true);
-                $this->attachRequestPayload($ch, $args);
+                $encoded = http_build_query($args);
+                $this->last_request['body'] = $encoded;
+                curl_setopt($ch, CURLOPT_POST, 1);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $encoded);
                 break;
 
             case 'get':
@@ -280,14 +341,12 @@ class OrangeLogic
 
         $response['body']    = curl_exec($ch);
         $response['headers'] = curl_getinfo($ch);
+        $this->last_error = curl_error($ch);
 
         if (isset($response['headers']['request_header'])) {
             $this->last_request['headers'] = $response['headers']['request_header'];
         }
 
-        if ($response['body'] === false) {
-            $this->last_error = curl_error($ch);
-        }
 
         curl_close($ch);
 
@@ -296,21 +355,9 @@ class OrangeLogic
             $_SESSION['ol_token_timeout'] = time() + ($timeout * 60);
         }
 
-        return $this->formatResponse($response);
+        return $response;
     }
 
-    /**
-     * Encode the data and attach it to the request
-     * @param   resource $ch cURL session handle, used by reference
-     * @param   array $data Assoc array of data to attach
-     */
-    private function attachRequestPayload(&$ch, $data)
-    {
-        $encoded = http_build_query($data);
-        $this->last_request['body'] = $encoded;
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $encoded);
-    }
 
     /**
      * Decode the response and format any error messages for debugging
@@ -341,6 +388,7 @@ class OrangeLogic
 
     /**
      * Private function to validate if domain is valid format
+     *
      * @param string $url 
      */
     private function is_valid_domain() 
@@ -351,4 +399,18 @@ class OrangeLogic
         return true;
     }
 
+    /**
+     * Convert array key-value pair to web query string format without encoding
+     *
+     */
+    private function array_to_query($arr)
+    {
+        $query = array();
+
+        foreach($arr as $key => $value) {
+           $query[] = "$key=$value";
+        }
+
+        return implode('&', $query);
+    }
 }
